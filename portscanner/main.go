@@ -30,7 +30,7 @@ func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer, results *[
 	for addr := range tasks {
 		var success bool
 		
-		for i := range maxRetries {
+		for i := 0; i < maxRetries; i++ {
 			conn, err := dialer.Dial("tcp", addr) //attempt tcp connection
 			if err == nil {                       // if statement if the connection is successful
 				conn.Close()
@@ -46,14 +46,18 @@ func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer, results *[
 		}
 		if success { //if sucessful increment the openports count
 			mutex.Lock()   //lock to ensure multiple goroutines do not interfering
-			port, _ := strconv.Atoi(addr[strings.LastIndex(addr, ":")+1:])
+			port, err := strconv.Atoi(addr[strings.LastIndex(addr, ":")+1:])
+			if err != nil {
+				fmt.Printf("Failed to parse port from address %s: %v\n", addr, err)
+				continue
+			}
 			*results = append(*results, Result{
 				Target: addr[:strings.LastIndex(addr, ":")],
 				Port:   port,
 				Open:   true,
 			})
-			mutex.Unlock() //unlock after incerement
-		} 
+			mutex.Unlock()
+		}
 	}
 }
 
@@ -85,6 +89,7 @@ func main() {
 	workers := flag.Int("workers", 100, "Number of concurrent workers (default: 100)") //number of workers
 	timeout := flag.Int("timeout", 5, "connection timeout for each port in seconds(default: 5)")
 	jsonoutput := flag.Bool("json", false, "output results in JSON format")
+	portsflag := flag.String("ports", "", "list of specific ports to scan")
 	flag.Parse() //parse command line flags
 
 	var targetList []string //determine the targets
@@ -92,6 +97,23 @@ func main() {
 		targetList = strings.Split(*targetsFlag, ",")
 	} else {
 		targetList = append(targetList, *target)
+	}
+
+	var portstoscan []int //list of ports to scan
+	if *portsflag != "" {
+		ports := strings.Split(*portsflag, ",")
+		for _, port := range ports {
+			portnum, err := strconv.Atoi(port)
+			if err != nil {
+				fmt.Printf("Invalid port number '%s'. Skipping...\n", port)
+				continue
+			}
+			portstoscan = append(portstoscan,portnum)
+		}
+	}else {
+		for p := *startport; p<= *endport; p++ {
+			portstoscan = append(portstoscan, p)
+		}
 	}
 
 	dialer := net.Dialer{ //handle TCP connections
@@ -107,11 +129,11 @@ func main() {
 	}
 
 	starttime := time.Now()                 //start time of the scan
-	totalports := (*endport - *startport + 1) * len(targetList) //calculate total ports
+	totalports := len(portstoscan) * len(targetList) //calculate total ports
 
 	for _, t := range strings.Split(*target, ",") { //print multiple targets
 		t = strings.TrimSpace(t) // Remove spaces
-		for p := *startport; p <= *endport; p++ {
+		for _, p := range portstoscan {
 			port := strconv.Itoa(p)              //convert port number to a string
 			address := net.JoinHostPort(t, port) //put target and port into a address
 			tasks <- address                     //send address to worker channel
