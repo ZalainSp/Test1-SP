@@ -46,15 +46,15 @@ func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer, results *[
 		}
 		if success { //if sucessful increment the openports count
 			mutex.Lock()   //lock to ensure multiple goroutines do not interfering
-			port, err := strconv.Atoi(addr[strings.LastIndex(addr, ":")+1:])
+			port, err := strconv.Atoi(addr[strings.LastIndex(addr, ":")+1:]) //get port number behind last colon in address
 			if err != nil {
-				fmt.Printf("Failed to parse port from address %s: %v\n", addr, err)
+				fmt.Printf("Failed to parse port from address %s: %v\n", addr, err) //if there is an error getting the port print an error and skip to the next one
 				continue
 			}
 			*results = append(*results, Result{
-				Target: addr[:strings.LastIndex(addr, ":")],
-				Port:   port,
-				Open:   true,
+				Target: addr[:strings.LastIndex(addr, ":")], //get the target address
+				Port:   port, //set port number
+				Open:   true, //mark port as open
 			})
 			mutex.Unlock()
 		}
