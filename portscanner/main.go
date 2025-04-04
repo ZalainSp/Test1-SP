@@ -4,6 +4,7 @@
 package main
 
 import (
+	"strings"
 	"flag"
 	"fmt"
 	"net"
@@ -48,14 +49,13 @@ func banner(conn net.Conn) { //grab banner from a successful connection
 	n, err := conn.Read(buf)                          //read data from connection
 
 	if err != nil { //if there is a error print it
-		fmt.Printf("error handing banner: %s \n", err)
+		fmt.Printf("error handling banner: %s \n", err)
 		return
 	}
 	if n > 0 { //print the banner
 		fmt.Printf("Banner from %s to %s \n", conn.RemoteAddr(), string(buf[:n]))
 		return
 	}
-
 }
 
 func main() {
@@ -84,19 +84,25 @@ func main() {
 	}
 
 	starttime := time.Now() //start time of the scan
+	totalports := *endport - *startport + 1 //calculate total ports
 
+	for _, t := range strings.Split(*target, ",") { //print multiple targets
+		t = strings.TrimSpace(t) // Remove spaces
 	for p := *startport; p <= *endport; p++ {
 		port := strconv.Itoa(p)                    //convert port number to a string
 		address := net.JoinHostPort(*target, port) //put target and port into a address
 		tasks <- address                           //send address to worker channel
+
+		fmt.Printf("Scanning %s on port %d/%d\n", t, p, *endport) //long scan feedback
 	}
+}
 	close(tasks) //close tasks
 	wg.Wait()    //wait for all worker go routines to finish
 
 	calculatedtime := time.Since(starttime)
 
 	//scan summary
-	fmt.Printf("Total ports scanned: %d\n", *endport-*startport+1)
+	fmt.Printf("Total ports scanned: %d\n", totalports)
 	fmt.Printf("Number of open ports: %d\n", openports)
 	fmt.Printf("Total time taken: %d\n", calculatedtime)
 }
