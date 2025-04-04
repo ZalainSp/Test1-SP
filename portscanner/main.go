@@ -13,7 +13,7 @@ import (
 )
 
 //worker function 
-func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer) {
+func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer, openports *int, mutex *sync.Mutex) {
 	defer wg.Done()
 	maxRetries := 3 //set the max amount of retries for connection attemps
     for addr := range tasks {
@@ -22,16 +22,21 @@ func worker(wg *sync.WaitGroup, tasks chan string, dialer net.Dialer) {
 		conn, err := dialer.Dial("tcp", addr) //attempt tcp connection
 		if err == nil { // if statement if the connection is successful
 			conn.Close()
-			fmt.Printf("Connection to %s was successful\n", addr)
 			success = true
 			break //exit loop
 		}
 		backoff := time.Duration(1<<i) * time.Second //if there is no connection calculate total backoff and retry
-		fmt.Printf("Attempt %d to %s failed. Waiting %v...\n", i+1,  addr, backoff)
 		time.Sleep(backoff) //wait before trying again
 	    }
 		if !success { //if everything fails print error message
 			fmt.Printf("Failed to connect to %s after %d attempts\n", addr, maxRetries)
+		}
+		if success { //if sucessful increment the openports count
+			mutex.Lock() //lock to ensure multiple goroutines do not interfering 
+			*openports++ //increment openports
+			mutex.Unlock() //unlock after incerement 
+		}else{
+			fmt.Printf("Failed to connect to %s after %d attempts\n", addr, maxRetries) //if the connection fails print error message
 		}
 	}
 }
@@ -53,12 +58,16 @@ func main() {
 		Timeout: 5 * time.Second, //timout for each connection
 	}
   
+	var openports int //keep track of open ports
+	var mutex sync.Mutex //to help with the access to openports
 	
 
     for i := 1; i <= *workers; i++ { //increment to the amount of workers
 		wg.Add(1) 
-		go worker(&wg, tasks, dialer) //start the worker go routine
+		go worker(&wg, tasks, dialer, &openports, &mutex) //start the worker go routine
 	}
+	
+	starttime := time.Now() //start time of the scan
 
 
 	for p := *startport; p <= *endport; p++ {
@@ -68,4 +77,11 @@ func main() {
 	}
 	close(tasks) //close tasks
 	wg.Wait() //wait for all worker go routines to finish
+
+	calculatedtime := time.Since(starttime) 
+
+	//scan summary
+	fmt.Printf("Total ports scanned: %d\n",*endport-*startport+1)
+	fmt.Printf("Number of open ports: %d\n", openports)
+	fmt.Printf("Total time taken: %d\n", calculatedtime)
 }
