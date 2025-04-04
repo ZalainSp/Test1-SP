@@ -50,12 +50,13 @@ func main() {
     target := flag.String("target","scanme.nmap.org", "specify the IP address or hostname" ) //target IP address or hostname
 	startport := flag.Int("start port", 1, "Start port (default: 1) ") //starting port for scanning
 	endport := flag.Int("end port", 1042, "End port(default: 1024)") //ending port for scanning
-	workers := flag.Int("workers", 100, "Number of concurrent workers (default: 100)")
+	workers := flag.Int("workers", 100, "Number of concurrent workers (default: 100)") //number of workers
+	timeout:= flag.Int("timeout", 5, "connection timeout for each port in seconds(default: 5)")
 	flag.Parse() //parse command line flags
 	
 
 	dialer := net.Dialer { //handle TCP connections 
-		Timeout: 5 * time.Second, //timout for each connection
+		Timeout: time.Duration(*timeout)*time.Second, //timout for each connection
 	}
   
 	var openports int //keep track of open ports
